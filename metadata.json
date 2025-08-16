@@ -1,0 +1,6 @@
+{
+  "name": "My Property",
+  "description": "An AI-powered property rental finder application that uses Gemini to search for listings based on user criteria and displays results with source attributions from Google Search.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
