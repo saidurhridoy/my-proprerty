@@ -9,7 +9,8 @@ interface SearchFormProps {
   searchCriteria: SearchCriteria;
   onPropertyTypeSelect: (type: PropertyType | null) => void;
   onAmenityToggle: (amenityId: string, category: 'safety' | 'utility') => void;
-  onLocationChange: (location: string) => void;
+  onLocationQueryChange: (query: string) => void;
+  onPinLocationChange: (location: { lat: number; lng: number }) => void;
   onSearch: () => void;
   onClear: () => void;
   isLoading: boolean;
@@ -20,7 +21,8 @@ const SearchForm: React.FC<SearchFormProps> = ({
   searchCriteria,
   onPropertyTypeSelect,
   onAmenityToggle,
-  onLocationChange,
+  onLocationQueryChange,
+  onPinLocationChange,
   onSearch,
   onClear,
   isLoading,
@@ -45,8 +47,10 @@ const SearchForm: React.FC<SearchFormProps> = ({
         categoryTitle="Utilities & Comfort"
       />
       <LocationSelector
-        location={searchCriteria.location}
-        onLocationChange={onLocationChange}
+        locationQuery={searchCriteria.locationQuery}
+        pinnedLocation={searchCriteria.pinnedLocation}
+        onLocationQueryChange={onLocationQueryChange}
+        onPinLocationChange={onPinLocationChange}
       />
       <div className="flex flex-col sm:flex-row gap-4">
         <button

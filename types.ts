@@ -1,4 +1,3 @@
-
 export enum PropertyType {
   BACHELOR = 'Bachelor Pad',
   FAMILY = 'Family Home',
@@ -29,7 +28,9 @@ export interface SearchCriteria {
   propertyType: PropertyType | null;
   safetyAmenities: string[]; // Array of amenity IDs
   utilityAmenities: string[]; // Array of amenity IDs
-  location: string;
+  locationQuery: string;
+  pinnedLocation: { lat: number; lng: number } | null;
+  aiPrompt: string;
 }
 
 // Types for Gemini grounding metadata

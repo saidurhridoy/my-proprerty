@@ -1,9 +1,9 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import Header from './components/Header';
 import SearchForm from './components/SearchForm';
 import ListingsDisplay from './components/ListingsDisplay';
 import AddListingModal from './components/AddListingModal';
+import AIPromptSearch from './components/AIPromptSearch';
 import { PropertyType, SearchCriteria, Listing, GroundingChunk } from './types';
 import { API_KEY_ERROR_MESSAGE } from './constants';
 import { findListings, isApiKeyConfigured } from './services/geminiService';
@@ -12,7 +12,9 @@ const defaultSearchCriteria: SearchCriteria = {
   propertyType: null,
   safetyAmenities: [],
   utilityAmenities: [],
-  location: 'New York, NY',
+  locationQuery: 'New York, NY',
+  pinnedLocation: { lat: 40.7128, lng: -74.0060 }, // Default to NYC coordinates
+  aiPrompt: '',
 };
 
 const USER_LISTINGS_STORAGE_KEY = 'userPropertyListings';
@@ -25,6 +27,7 @@ const App: React.FC = () => {
   const [sourceAttributions, setSourceAttributions] = useState<GroundingChunk[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [apiKeyAvailable, setApiKeyAvailable] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -72,14 +75,23 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const handleLocationChange = useCallback((location: string) => {
-    setSearchCriteria(prev => ({ ...prev, location }));
+  const handleLocationQueryChange = useCallback((query: string) => {
+    setSearchCriteria(prev => ({ ...prev, locationQuery: query }));
+  }, []);
+
+  const handlePinLocationChange = useCallback((location: { lat: number; lng: number }) => {
+    setSearchCriteria(prev => ({ ...prev, pinnedLocation: location }));
   }, []);
   
+  const handleAiPromptChange = useCallback((prompt: string) => {
+      setSearchCriteria(prev => ({...prev, aiPrompt: prompt}));
+  }, []);
+
   const handleClear = useCallback(() => {
     setSearchCriteria(defaultSearchCriteria);
     setListings([]);
     setError(null);
+    setWarning(null);
     setSourceAttributions([]);
   }, []);
 
@@ -88,12 +100,13 @@ const App: React.FC = () => {
       setError(API_KEY_ERROR_MESSAGE);
       return;
     }
-    if (!searchCriteria.location.trim()) {
-      setError("Please enter a location to search for properties.");
+    if (!searchCriteria.pinnedLocation) {
+      setError("Please select a location on the map to search for properties.");
       return;
     }
     setIsLoading(true);
     setError(null);
+    setWarning(null);
     setListings([]);
     setSourceAttributions([]);
 
@@ -105,6 +118,9 @@ const App: React.FC = () => {
     } else {
       setListings(result.listings);
       setSourceAttributions(result.groundingChunks);
+      if(result.warning) {
+          setWarning(result.warning);
+      }
     }
     setIsLoading(false);
   }, [apiKeyAvailable, searchCriteria]);
@@ -133,17 +149,33 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Header onOpenModal={() => setIsModalOpen(true)} />
       <main className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow">
-        <SearchForm
-          searchCriteria={searchCriteria}
-          onPropertyTypeSelect={handlePropertyTypeSelect}
-          onAmenityToggle={handleAmenityToggle}
-          onLocationChange={handleLocationChange}
-          onSearch={handleSearch}
-          onClear={handleClear}
-          isLoading={isLoading}
-          apiKeyAvailable={apiKeyAvailable}
+        <AIPromptSearch 
+            prompt={searchCriteria.aiPrompt}
+            onPromptChange={handleAiPromptChange}
+            onSearch={handleSearch}
+            isLoading={isLoading}
+            apiKeyAvailable={apiKeyAvailable}
         />
-        <ListingsDisplay listings={allListings} sourceAttributions={sourceAttributions} isLoading={isLoading} error={error} />
+        <div className="mt-8">
+            <SearchForm
+            searchCriteria={searchCriteria}
+            onPropertyTypeSelect={handlePropertyTypeSelect}
+            onAmenityToggle={handleAmenityToggle}
+            onLocationQueryChange={handleLocationQueryChange}
+            onPinLocationChange={handlePinLocationChange}
+            onSearch={handleSearch}
+            onClear={handleClear}
+            isLoading={isLoading}
+            apiKeyAvailable={apiKeyAvailable}
+            />
+        </div>
+        <ListingsDisplay 
+            listings={allListings} 
+            sourceAttributions={sourceAttributions} 
+            isLoading={isLoading} 
+            error={error} 
+            warning={warning} 
+        />
       </main>
       <AddListingModal 
         isOpen={isModalOpen}

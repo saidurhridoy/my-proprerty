@@ -23,10 +23,11 @@ const parseListingsFromString = (text: string): Listing[] => {
     const lines = block.split("END_LISTING")[0].trim().split('\n');
     
     lines.forEach(line => {
-      const parts = line.split(': ');
-      if (parts.length >= 2) {
-        const key = parts[0].trim();
-        const value = parts.slice(1).join(': ').trim();
+      // Use a more robust regex to split on the first colon, allowing for whitespace variations.
+      const match = line.match(/^([^:]+):\s*(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        const value = match[2].trim();
         switch (key) {
           case 'TITLE': listing.title = value; break;
           case 'ADDRESS': listing.address = value; break;
@@ -48,9 +49,13 @@ const parseListingsFromString = (text: string): Listing[] => {
 };
 
 
-export const findListings = async (criteria: SearchCriteria): Promise<{ listings: Listing[], groundingChunks: GroundingChunk[], error?: string }> => {
+export const findListings = async (criteria: SearchCriteria): Promise<{ listings: Listing[], groundingChunks: GroundingChunk[], error?: string, warning?: string }> => {
   if (!ai) {
     return { listings: [], groundingChunks: [], error: API_KEY_ERROR_MESSAGE };
+  }
+  
+  if (!criteria.pinnedLocation) {
+    return { listings: [], groundingChunks: [], error: "Please select a location on the map." };
   }
 
   const safetyAmenityNames = criteria.safetyAmenities
@@ -63,13 +68,20 @@ export const findListings = async (criteria: SearchCriteria): Promise<{ listings
     .filter(Boolean)
     .join(', ');
 
+  const userRequestSection = criteria.aiPrompt.trim()
+    ? `The user has a specific request: "${criteria.aiPrompt}". This is the most important part of the search. Use it as your primary guide.`
+    : `The user has not provided a specific text prompt. Infer their needs from the structured criteria below.`;
+
   const prompt = `
 You are an expert real estate search assistant. Your task is to find and summarize real property rental listings from agoda.com, airbnb.com, and booking.com based on user-defined criteria.
 Use Google Search to query these specific sites for relevant listings.
 
-Criteria:
+${userRequestSection}
+
+Use the following details to find and filter relevant listings. If the user's prompt conflicts with these filters, prioritize the user's prompt.
+- Location (Coordinates): Latitude ${criteria.pinnedLocation.lat}, Longitude ${criteria.pinnedLocation.lng}
+- Location (Context): ${criteria.locationQuery || 'Not specified'}
 - Property Type: ${criteria.propertyType || 'Any'}
-- Location: ${criteria.location || 'Any major city'}
 - Safety/Security Amenities: ${safetyAmenityNames || 'Not specified'}
 - Utility Amenities: ${utilityAmenityNames || 'Not specified'}
 
@@ -103,19 +115,22 @@ Ensure that the SOURCE_URL for each listing is a valid link to its page on one o
     const listings = parseListingsFromString(responseText);
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     
-    if (listings.length === 0 && responseText.length > 0) {
-      // If parsing failed but we got some text, return it as a generic description
-      // This is a fallback if the model doesn't follow the format perfectly
+    if (listings.length === 0 && responseText.trim().length > 0) {
+      // If parsing failed but we got some text, return it as a generic description with a warning.
+      // This is a fallback if the model doesn't follow the format perfectly.
       console.warn("Gemini response did not strictly follow the expected START_LISTING/END_LISTING format. Raw response:", responseText);
       const fallbackListing: Listing = {
         id: `fallback-${Date.now()}`,
         title: "AI Generated Response (Format Mismatch)",
-        description: "The AI model provided information, but it wasn't in the structured format expected. Displaying the raw text it returned:\n\n" + responseText.substring(0, 500) + (responseText.length > 500 ? "..." : ""),
+        description: "The AI model provided information, but it wasn't in the structured format expected. Displaying the raw text it returned:\n\n" + responseText,
         imageUrl: "https://picsum.photos/seed/fallback/400/300"
       };
-      return { listings: [fallbackListing], groundingChunks, error: "AI model did not return listings in the expected format. Displaying raw response. Check console for more details." };
+      return { 
+          listings: [fallbackListing], 
+          groundingChunks, 
+          warning: "The AI's response couldn't be fully structured, so the raw text is shown below. Some details might be missing." 
+      };
     }
-
 
     return { listings, groundingChunks };
 
